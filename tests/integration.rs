@@ -1,5 +1,3 @@
-#![feature(extern_prelude)]
-
 extern crate assert_cmd;
 extern crate assert_fs;
 extern crate gstreamer as gst;
@@ -7,10 +5,10 @@ extern crate predicates;
 
 #[cfg(test)]
 mod integration {
+    use crate::gst;
+    use crate::gst::prelude::*;
     use assert_cmd::prelude::*;
     use assert_fs::prelude::*;
-    use gst;
-    use gst::prelude::*;
     use predicates::prelude::*;
     use std::env;
     use std::path::Path;
@@ -253,7 +251,7 @@ mod integration {
 
     fn ok(args_string: &str) {
         let args: Vec<&str> = args_string.split(' ').collect();
-        Command::main_binary()
+        Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .expect("Could not set up binary")
             .args(&args)
             .assert()
@@ -262,7 +260,7 @@ mod integration {
 
     fn fail(args_string: &str) {
         let args: Vec<&str> = args_string.split(' ').collect();
-        Command::main_binary()
+        Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .expect("Could not set up binary, part 2")
             .args(&args)
             .assert()
@@ -275,7 +273,7 @@ mod integration {
         let filename = test_file_name();
         let mut args: Vec<&str> = args_string.split(' ').collect();
         args.push(&filename);
-        Command::main_binary()
+        Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .expect("Could not set up binary, part 3")
             .args(&args)
             .assert()
@@ -288,7 +286,7 @@ mod integration {
         let filename = test_file_name();
         let mut args: Vec<&str> = args_string.split(' ').collect();
         args.push(&filename);
-        Command::main_binary()
+        Command::cargo_bin(env!("CARGO_PKG_NAME"))
             .expect("Could not set up binary, part 4")
             .args(&args)
             .assert()

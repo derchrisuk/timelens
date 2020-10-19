@@ -49,8 +49,14 @@ fn main() {
 
     if let Some(ref timeline_filename) = config.timeline_filename {
         // Write resulting timeline to a file
-        timeline.write_to(&timeline_filename, 90);
-        println!("-> timeline witten to '{}'", timeline_filename);
+        match timeline.write_to(&timeline_filename, 90) {
+            Ok(_) => {
+                println!("-> timeline witten to '{}'", timeline_filename);
+            }
+            Err(description) => {
+                error(&description);
+            }
+        }
     }
 
     if let Some(ref vtt_filename) = config.vtt_filename {
@@ -62,8 +68,14 @@ fn main() {
         for (i, grid) in thumbnail_grids.iter().enumerate() {
             // Write resulting thumbnails to a file
             let grid_filename = grid_filename(i, &config);
-            grid.write_to(&grid_filename, 40);
-            print!(" '{}'", grid_filename);
+            match grid.write_to(&grid_filename, 40) {
+                Ok(_) => {
+                    print!(" '{}'", grid_filename);
+                }
+                Err(description) => {
+                    error(&description);
+                }
+            }
         }
         println!();
     }
@@ -278,7 +290,8 @@ fn parse_config() -> Config {
         if path.extension().is_none()
             || path
                 .extension()
-                .expect("Could not get extension from timeline argument") != "jpg"
+                .expect("Could not get extension from timeline argument")
+                != "jpg"
         {
             error("You must specify a .jpg file as an output for `--timeline`.");
         }
@@ -302,7 +315,8 @@ fn parse_config() -> Config {
         if path.extension().is_none()
             || path
                 .extension()
-                .expect("Could not get extension from thumbnails argument") != "vtt"
+                .expect("Could not get extension from thumbnails argument")
+                != "vtt"
         {
             error("You must specify a .vtt file as an output for `--thumbnails`.");
         }
@@ -319,7 +333,7 @@ fn parse_config() -> Config {
         height: height.expect("Could not read height, part 3"),
 
         thumbnail_width: 0,
-        thumbnail_height: thumbnail_height,
+        thumbnail_height,
         thumbnail_columns: 0,
 
         input_filename: String::from(input_filename),
@@ -413,15 +427,32 @@ fn generate_timeline_and_thumbnails(
         stdout().flush().expect("Could not flush stdout");
     }
 
+    let elapsed = start_time.elapsed().unwrap_or(Duration::new(0, 0));
+    let total_seconds = elapsed.as_secs() as f32 + elapsed.subsec_millis() as f32 / 1000.0;
+    let elapsed_minutes = total_seconds as usize / 60;
+    let elapsed_seconds = total_seconds as usize % 60;
+
+    print!(
+        "\rtimelens: {:.1}% (total time: {}:{:02})",
+        100.0, elapsed_minutes, elapsed_seconds
+    );
+
+    stdout().flush().expect("Could not flush stdout");
+
     (timeline, grids)
 }
 
 // Convert milliseconds to a WebVTT timestamp (which has the format "(HH:)MM:SS.mmmm")
 fn timestamp(mseconds_total: i32) -> String {
-    let minutes = mseconds_total / (1000 * 60);
-    let seconds = (mseconds_total - 1000 * 60 * minutes) / 1000;
-    let mseconds = mseconds_total - 1000 * (seconds + 60 * minutes);
-    format!("{:02}:{:02}.{:03}", minutes, seconds, mseconds)
+    let hours = mseconds_total / (1000 * 60 * 60);
+    let minutes = (mseconds_total - 1000 * 60 * 60 * hours) / (1000 * 60);
+    let seconds = (mseconds_total - 1000 * 60 * (minutes + 60 * hours)) / 1000;
+    let mseconds = mseconds_total - 1000 * (seconds + 60 * (minutes + 60 * hours));
+    if hours > 0 {
+        format!("{}:{:02}:{:02}.{:03}", hours, minutes, seconds, mseconds)
+    } else {
+        format!("{:02}:{:02}.{:03}", minutes, seconds, mseconds)
+    }
 }
 
 // Write a WebVTT file pointing to the thumbnail locations
@@ -474,7 +505,8 @@ fn write_vtt(config: &Config, duration: f32) {
             y,
             w,
             h
-        ).expect("Could not write to VTT file");
+        )
+        .expect("Could not write to VTT file");
     }
 }
 
@@ -483,7 +515,8 @@ fn check_for_collision(existing: &str, new_opt: &Option<String>) {
     if let Some(new) = new_opt {
         let e = PathBuf::from(existing);
         let n = PathBuf::from(new);
-        if e.exists() && n.exists()
+        if e.exists()
+            && n.exists()
             && fs::canonicalize(&e).expect("Could not canonicalize existing path")
                 == fs::canonicalize(&n).expect("Could not canonicalize new path")
         {
@@ -518,4 +551,13 @@ fn grid_filename(i: usize, config: &Config) -> String {
         .expect("Could not clone VTT filename, again");
     let stem = &vtt_filename[..vtt_filename.len() - 4];
     format!("{}-{:02}.jpg", stem, i)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_timestamp() {
+        use crate::timestamp;
+        assert_eq!(timestamp((13 + 60 * (30 + 60 * 2)) * 1000), "2:30:13.000");
+    }
 }

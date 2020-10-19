@@ -1,7 +1,8 @@
 extern crate gstreamer as gst;
 extern crate gstreamer_app as gst_app;
 
-use frame::gst::prelude::*;
+use crate::frame::gst::prelude::*;
+use std::fs::File;
 
 // Holds a GStreamer Buffer, and knows its size and (optionally) its presentation timestamp in
 // seconds
@@ -14,9 +15,9 @@ pub struct Frame {
 
 impl Frame {
     // Initialize a new empty frame of size width*height
-    pub fn new(width: usize, height: usize) -> Frame {
+    pub fn new(width: usize, height: usize) -> Self {
         let buffer = gst::Buffer::with_size(width * height * 4).expect("Could not create buffer");
-        Frame {
+        Self {
             buffer,
             width,
             height,
@@ -25,10 +26,10 @@ impl Frame {
     }
 
     // Scale frame to width*height. Only supports horizontal compression so far.
-    pub fn scale(&self, width: usize, height: usize) -> Frame {
+    pub fn scale(&self, width: usize, height: usize) -> Self {
         if width == 1 {
             // First, scale to 1 pixel width
-            let mut frame = Frame::new(1, self.height);
+            let mut frame = Self::new(1, self.height);
 
             {
                 let buffer = frame
@@ -68,7 +69,7 @@ impl Frame {
             }
 
             // Then, scale to target height
-            let mut frame2 = Frame::new(width, height);
+            let mut frame2 = Self::new(width, height);
 
             {
                 let buffer = frame2
@@ -217,12 +218,12 @@ impl Frame {
                 .into_result()
                 .expect("Could not stop scaling pipeline");
 
-            Frame {
+            Self {
                 buffer: sample
                     .get_buffer()
                     .expect("Could not get buffer from sample in scaling pipeline"),
-                width: width,
-                height: height,
+                width,
+                height,
                 pts: Some(
                     sample
                         .get_buffer()
@@ -237,7 +238,7 @@ impl Frame {
     }
 
     // Copy the `other` frame into `self`, with the top left at dx/dy
-    pub fn copy(&mut self, other: &Frame, dx: usize, dy: usize) {
+    pub fn copy(&mut self, other: &Self, dx: usize, dy: usize) {
         let mut data = self
             .buffer
             .get_mut()
@@ -266,7 +267,16 @@ impl Frame {
     }
 
     // Write frame to `filename` as a JPEG using GStreamer
-    pub fn write_to(&self, filename: &str, quality: i32) {
+    pub fn write_to(&self, filename: &str, quality: i32) -> Result<bool, String> {
+        {
+            match File::create(&filename) {
+                Ok(file) => file,
+                Err(e) => {
+                    return Err(format!("Could not create '{}': {})", &filename, e));
+                }
+            };
+        }
+
         let src =
             gst::ElementFactory::make("appsrc", None).expect("Could not create appsrc for writing");
 
@@ -348,5 +358,7 @@ impl Frame {
             .set_state(gst::State::Null)
             .into_result()
             .expect("Could not stop writing pipeline");
+
+        Ok(true)
     }
 }
